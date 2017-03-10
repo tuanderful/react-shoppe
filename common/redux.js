@@ -26,6 +26,7 @@ export const types = {
   UPDATE_CART: 'UPDATE_CART',
   ADD_TO_CART: 'ADD_TO_CART',
   REMOVE_FROM_CART: 'REMOVE_FROM_CART',
+  DELETE_FROM_CART: 'DELETE_FROM_CART',
 };
 
 export const updateFilter = e => {
@@ -173,20 +174,23 @@ export function removeFromCart(itemId) {
   };
 }
 
-export function deleteFromCart(itemId) {
-  return function(dispatch, getState) {
-    const {
-      user: { id },
-      token
-    } = getState();
+export const deleteFromCartEpic = (actions, { getState }) => {
+  return actions.ofType(types.DELETE_FROM_CART)
+    .switchMap(({ itemId }) => {
+      const { user: { id }, token } = getState();
 
-    if (id && token) {
-      api.deleteFromCart(id, token, itemId)
-        .then(({ cart }) => dispatch({
-          type: types.UPDATE_CART,
-          cart
-        }));
-    }
+      if (!id || !token) {
+        return Observable.of({ type: 'USER_NOT_LOGGED_IN' });
+      }
+
+      return makeApiCall(types.DELETE_FROM_CART, id, token, itemId);
+    });
+};
+
+export const deleteFromCart = (itemId) => {
+  return {
+    type: types.DELETE_FROM_CART,
+    itemId,
   };
 }
 
@@ -242,4 +246,5 @@ export const epics = [
   fetchProductsEpic,
   addToCartEpic,
   removeFromCartEpic,
+  deleteFromCartEpic,
 ];
