@@ -112,17 +112,14 @@ export function autoLogin() {
   };
 }
 
+// actions is an Observable?
 export function addToCartEpic(actions, { getState }) {
   return actions.ofType(types.ADD_TO_CART)
     .switchMap(({ itemId }) => {
-      const {
-        user: { id },
-        token
-      } = getState();
+      const { user: { id }, token } = getState();
 
       if (!id || !token) {
-        // return null;
-        return Observable.empty();
+        return Observable.of({ type: 'USER_NOT_LOGGED_IN' });
       }
 
       // wrap promise to change to observable
@@ -142,23 +139,6 @@ export function addToCart(itemId) {
     itemId
   };
 }
-
-// export function addToCart(itemId) {
-//   return function(dispatch, getState) {
-//     const {
-//       user: { id },
-//       token
-//     } = getState();
-//
-//     if (id && token) {
-//       api.addToCart(id, token, itemId)
-//         .then(({ cart }) => dispatch({
-//           type: types.UPDATE_CART,
-//           cart
-//         }));
-//     }
-//   };
-// }
 
 export function removeFromCart(itemId) {
   return function(dispatch, getState) {
@@ -240,3 +220,9 @@ export default function reducer(state = initialState, action) {
   }
   return state;
 }
+
+
+export const epics = [
+  fetchProductsEpic,
+  addToCartEpic,
+];
