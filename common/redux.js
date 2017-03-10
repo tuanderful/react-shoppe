@@ -25,6 +25,7 @@ export const types = {
   UPDATE_USER_ERROR: 'UPDATE_USER_ERROR',
   UPDATE_CART: 'UPDATE_CART',
   ADD_TO_CART: 'ADD_TO_CART',
+  REMOVE_FROM_CART: 'REMOVE_FROM_CART',
 };
 
 export const updateFilter = e => {
@@ -112,7 +113,26 @@ export function autoLogin() {
   };
 }
 
-// actions is an Observable?
+const typeToMethod = {
+  [types.ADD_TO_CART]: 'addToCart',
+  [types.REMOVE_FROM_CART]: 'removeFromCart',
+  [types.DELETE_FROM_CART]: 'deleteFromCart',
+};
+
+function makeApiCall(type, id, token, itemId) {
+  const method = typeToMethod[type];
+
+  // wrap promise to change to observable
+  // eslint-disable-next-line import/namespace
+  return Observable.fromPromise(api[method](id, token, itemId))
+    // then changed to map that returns an action
+    .map(({ cart }) => ({
+      type: types.UPDATE_CART,
+      cart
+    }))
+    .catch(() => Observable.create({ type: 'ERROR_IN_CART' }));
+}
+
 export function addToCartEpic(actions, { getState }) {
   return actions.ofType(types.ADD_TO_CART)
     .switchMap(({ itemId }) => {
@@ -122,14 +142,7 @@ export function addToCartEpic(actions, { getState }) {
         return Observable.of({ type: 'USER_NOT_LOGGED_IN' });
       }
 
-      // wrap promise to change to observable
-      return Observable.fromPromise(api.addToCart(id, token, itemId))
-        // then changed to map that returns an action
-        .map(({ cart }) => ({
-          type: types.UPDATE_CART,
-          cart
-        }))
-        .catch(() => Observable.create({ type: 'ERROR_IN_CART' }));
+      return makeApiCall(types.ADD_TO_CART, id, token, itemId);
     });
 }
 
@@ -140,20 +153,23 @@ export function addToCart(itemId) {
   };
 }
 
-export function removeFromCart(itemId) {
-  return function(dispatch, getState) {
-    const {
-      user: { id },
-      token
-    } = getState();
+export const removeFromCartEpic = (actions, { getState }) => {
+  return actions.ofType(types.REMOVE_FROM_CART)
+    .switchMap(({ itemId }) => {
+      const { user: { id }, token } = getState();
 
-    if (id && token) {
-      api.removeFromCart(id, token, itemId)
-        .then(({ cart }) => dispatch({
-          type: types.UPDATE_CART,
-          cart
-        }));
-    }
+      if (!id || !token) {
+        return Observable.of({ type: 'USER_NOT_LOGGED_IN' });
+      }
+
+      return makeApiCall(types.REMOVE_FROM_CART, id, token, itemId);
+    });
+};
+
+export function removeFromCart(itemId) {
+  return {
+    type: types.REMOVE_FROM_CART,
+    itemId,
   };
 }
 
@@ -225,4 +241,5 @@ export default function reducer(state = initialState, action) {
 export const epics = [
   fetchProductsEpic,
   addToCartEpic,
+  removeFromCartEpic,
 ];
