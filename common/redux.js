@@ -1,3 +1,4 @@
+import { Observable } from 'rxjs';
 import { browserHistory as history } from 'react-router';
 import * as api from './api.js';
 
@@ -22,7 +23,8 @@ export const types = {
   UPDATE_USER: 'UPDATE_USER',
   UPDATE_USER_COMPLETE: 'UPDATE_USER_COMPLETE',
   UPDATE_USER_ERROR: 'UPDATE_USER_ERROR',
-  UPDATE_CART: 'UPDATE_CART'
+  UPDATE_CART: 'UPDATE_CART',
+  ADD_TO_CART: 'ADD_TO_CART',
 };
 
 export const updateFilter = e => {
@@ -32,18 +34,25 @@ export const updateFilter = e => {
   };
 };
 
-export function fetchProducts() {
-  return dispatch => {
-    dispatch({ type: types.FETCH_PRODUCTS });
-    api.fetchProducts()
-      .then(products => dispatch(fetchProductsComplete(products)))
-      .catch(err => dispatch({
-        type: types.FETCH_PRODUCTS_ERROR,
-        error: true,
-        payload: err
-      }));
-  };
-}
+export const fetchProductsEpic = (actions) => {
+  return actions.ofType(types.FETCH_PRODUCTS)
+    // end up with a stream of FETCH_PRODUCTS actions
+
+    .switchMap(() => {
+      // make the API call
+      return api.fetchProducts()
+        .then(products => fetchProductsComplete(products))
+        // catch here so error doesn't bubble up.
+        // and since this is a promise, we don't need to wrap in Observable
+        .catch(err => ({ type: 'APP_ERROR', payload: err }));
+    });
+    // could put error handling here, but it still collapses
+    // .catch(err => Observable.of({ type: 'APP_ERROR', payload: err }));
+};
+
+export const fetchProducts = () => ({
+  type: types.FETCH_PRODUCTS
+});
 
 export function fetchProductsComplete(products) {
   return {
@@ -103,22 +112,53 @@ export function autoLogin() {
   };
 }
 
-export function addToCart(itemId) {
-  return function(dispatch, getState) {
-    const {
-      user: { id },
-      token
-    } = getState();
+export function addToCartEpic(actions, { getState }) {
+  return actions.ofType(types.ADD_TO_CART)
+    .switchMap(({ itemId }) => {
+      const {
+        user: { id },
+        token
+      } = getState();
 
-    if (id && token) {
-      api.addToCart(id, token, itemId)
-        .then(({ cart }) => dispatch({
+      if (!id || !token) {
+        // return null;
+        return Observable.empty();
+      }
+
+      // wrap promise to change to observable
+      return Observable.fromPromise(api.addToCart(id, token, itemId))
+        // then changed to map that returns an action
+        .map(({ cart }) => ({
           type: types.UPDATE_CART,
           cart
-        }));
-    }
+        }))
+        .catch(() => Observable.create({ type: 'ERROR_IN_CART' }));
+    });
+}
+
+export function addToCart(itemId) {
+  return {
+    type: types.ADD_TO_CART,
+    itemId
   };
 }
+
+// export function addToCart(itemId) {
+//   return function(dispatch, getState) {
+//     const {
+//       user: { id },
+//       token
+//     } = getState();
+//
+//     if (id && token) {
+//       api.addToCart(id, token, itemId)
+//         .then(({ cart }) => dispatch({
+//           type: types.UPDATE_CART,
+//           cart
+//         }));
+//     }
+//   };
+// }
 
 export function removeFromCart(itemId) {
   return function(dispatch, getState) {
